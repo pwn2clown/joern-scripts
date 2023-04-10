@@ -2,7 +2,7 @@ import io.shiftleft.semanticcpg.language._
 
 
 @main def exec(cpgPath: String) = {
-  loadCpg(cpgPath)
+  importCpg(cpgPath)
 
   val spring_annotation = Set(
       "RequestMapping",
@@ -59,4 +59,40 @@ import io.shiftleft.semanticcpg.language._
 
   //  TODO: cover cases like:
   //  ResultSet rs = statement.executeQuery(sql)
+  
+  //  - RCE: Runtime.exec
+  //
+  //    Runtime run = Runtime.getRuntime();
+  //    Process p = run.exec(cmd);
+
+  results = cpg.call
+    .methodFullName("java.lang.Runtime.exec.*")
+    .reachableByFlows(sources).p
+
+  println(results)
+
+  //  - RCE: ProcessBuilder.start
+  //
+  //    String[] arrCmd = {"/bin/sh", "-c", cmd};
+  //    ProcessBuilder processBuilder = new ProcessBuilder(arrCmd);
+  //    Process p = processBuilder.start();
+
+  results = cpg.call
+    .methodFullName("java.lang.ProcessBuilder.start:java.lang.Process\\(\\)")
+    .reachableByFlows(sources).p
+
+  println(results)
+
+  //  - Arbitrary redirection: Location header injection
+  //
+  //    String url = request.getParameter("url");
+  //    response.setStatus(HttpServletResponse.SC_MOVED_PERMANENTLY); // 301 redirect
+  //    response.setHeader("Location", url);
+
+  results = cpg.call
+    .methodFullName(".*setHeader.*")
+    .where(_.argument.argumentIndex(1).code("\"Location\""))
+    .reachableByFlows(sources).p
+
+  println(results)
 }
